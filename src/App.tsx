@@ -20,9 +20,9 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(() => getBool(KEYS.isMuted, false));
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [babyPhoto, setBabyPhoto] = useState<string | null>(() => getValue(KEYS.babyPhoto) || null);
-  const [speechRate, setSpeechRate] = useState<number>(() => getNum(KEYS.speechRate, 0.85));
+  const [speechRate, setSpeechRate] = useState<number>(() => getNum(KEYS.speechRate, 0.9));
   const [speechPitch, setSpeechPitch] = useState<number>(() => {
-    const saved = getNum(KEYS.speechPitch, 1.15);
+    const saved = getNum(KEYS.speechPitch, 1.1);
     return Math.max(0.8, saved);
   });
   const [showSettings, setShowSettings] = useState(false);
@@ -47,6 +47,7 @@ export default function App() {
 
   useEffect(() => {
     if (!speechSupported || !isUnlocked) return;
+
     const updateVoices = () => {
       const availableVoices = window.speechSynthesis.getVoices();
       setVoices(availableVoices);
@@ -81,33 +82,30 @@ export default function App() {
     try {
       window.speechSynthesis.cancel();
 
-      const attemptSpeak = (delay: number) => {
-        window.setTimeout(() => {
-          try {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = speechRate;
-            utterance.pitch = Math.max(0.8, speechPitch);
-            utterance.volume = 1;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = speechRate;
+      utterance.pitch = Math.max(0.8, speechPitch);
+      utterance.volume = 1;
 
-            if (selectedVoiceURI) {
-              const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
-              if (voice) utterance.voice = voice;
-            }
+      if (selectedVoiceURI) {
+        const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
+        if (voice) utterance.voice = voice;
+      }
 
-            utterance.onstart = () => setSpeechStatus('Speaking...');
-            utterance.onend = () => setSpeechStatus('');
-            utterance.onerror = () => setSpeechStatus('Voice blocked on this device/app');
-
-            window.speechSynthesis.speak(utterance);
-          } catch {}
-        }, delay);
+      utterance.onstart = () => setSpeechStatus('Speaking...');
+      utterance.onend = () => setSpeechStatus('');
+      utterance.onerror = (e) => {
+        console.log('Speech error:', e);
+        setSpeechStatus('Voice blocked on this device/app');
       };
 
-      attemptSpeak(0);
-      attemptSpeak(120);
+      window.setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 250);
 
       return true;
-    } catch {
+    } catch (error) {
+      console.log('Speech failed:', error);
       setSpeechStatus('Voice not available');
       return false;
     }
@@ -122,8 +120,8 @@ export default function App() {
     try {
       window.speechSynthesis.cancel();
 
-      const utterance = new SpeechSynthesisUtterance(' ');
-      utterance.volume = 0;
+      const utterance = new SpeechSynthesisUtterance('Voice enabled');
+      utterance.volume = 0.2;
       utterance.rate = 1;
       utterance.pitch = 1;
 
@@ -131,6 +129,11 @@ export default function App() {
         const voice = voices.find(v => v.voiceURI === selectedVoiceURI);
         if (voice) utterance.voice = voice;
       }
+
+      utterance.onstart = () => {
+        setSpeechReady(true);
+        setSpeechStatus('Voice ready');
+      };
 
       utterance.onend = () => {
         setSpeechReady(true);
@@ -147,7 +150,7 @@ export default function App() {
       window.setTimeout(() => {
         setSpeechReady(true);
         setSpeechStatus('Voice ready');
-      }, 400);
+      }, 800);
     } catch {
       setSpeechReady(true);
       setSpeechStatus('Voice ready');
@@ -174,13 +177,17 @@ export default function App() {
   const handleNext = useCallback(() => {
     setCurrentIndex(prev => (prev + 1) % ALPHABET.length);
   }, []);
+
   const handlePrev = useCallback(() => {
     setCurrentIndex(prev => (prev - 1 + ALPHABET.length) % ALPHABET.length);
   }, []);
+
   const handleFromStarting = useCallback(() => {
     setCurrentIndex(0);
     setIsAutoPlaying(true);
-    speak(`${ALPHABET[0].letter} is for ${ALPHABET[0].word}`);
+    window.setTimeout(() => {
+      speak(`${ALPHABET[0].letter} is for ${ALPHABET[0].word}`);
+    }, 700);
   }, [speak]);
 
   useEffect(() => {
@@ -190,6 +197,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isUnlocked) return;
+
     if (isAutoPlaying) {
       autoPlayTimerRef.current = setInterval(() => {
         setCurrentIndex(prev => (prev + 1) % ALPHABET.length);
@@ -198,6 +206,7 @@ export default function App() {
       clearInterval(autoPlayTimerRef.current);
       autoPlayTimerRef.current = null;
     }
+
     return () => {
       if (autoPlayTimerRef.current) {
         clearInterval(autoPlayTimerRef.current);
@@ -209,14 +218,17 @@ export default function App() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file.');
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       alert('Please select an image smaller than 5 MB.');
       return;
     }
+
     const reader = new FileReader();
     reader.onloadend = () => {
       const result = reader.result;
@@ -241,6 +253,7 @@ export default function App() {
               <LockKeyhole size={40} className="text-indigo-600" />
             </div>
           </div>
+
           <h1 className="text-3xl font-bold text-indigo-600">INTK Kids Alphabet</h1>
           <p className="mt-3 text-gray-600 font-semibold">
             Welcome! Enter your family activation code one time on this device.
@@ -283,6 +296,7 @@ export default function App() {
         >
           {currentItem.word} <span className="text-5xl md:text-8xl">{currentItem.emoji}</span>
         </motion.h1>
+
         {speechStatus && (
           <p className="text-sm font-bold text-indigo-500">{speechStatus}</p>
         )}
@@ -298,7 +312,11 @@ export default function App() {
                   Change
                   <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
                 </label>
-                <button onClick={handleRemovePhoto} className="px-4 py-2 bg-rose-500 text-white rounded-full shadow-lg font-bold text-sm flex items-center gap-1">
+
+                <button
+                  onClick={handleRemovePhoto}
+                  className="px-4 py-2 bg-rose-500 text-white rounded-full shadow-lg font-bold text-sm flex items-center gap-1"
+                >
                   <Trash2 size={16} /> Remove
                 </button>
               </div>
@@ -334,7 +352,11 @@ export default function App() {
         )}
 
         <div className="w-full h-6 bg-gray-200 rounded-full overflow-hidden shadow-inner">
-          <motion.div className="h-full bg-indigo-500" initial={{ width: 0 }} animate={{ width: `${((currentIndex + 1) / ALPHABET.length) * 100}%` }} />
+          <motion.div
+            className="h-full bg-indigo-500"
+            initial={{ width: 0 }}
+            animate={{ width: `${((currentIndex + 1) / ALPHABET.length) * 100}%` }}
+          />
         </div>
 
         <p className="text-2xl font-semibold text-indigo-600">
@@ -342,25 +364,52 @@ export default function App() {
         </p>
 
         <div className="flex flex-wrap justify-center gap-4 pb-4">
-          <button onClick={handleFromStarting} className="flex items-center gap-2 px-6 py-4 bg-purple-500 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg">
+          <button
+            onClick={handleFromStarting}
+            className="flex items-center gap-2 px-6 py-4 bg-purple-500 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg"
+          >
             <RotateCcw size={28} /> From Start
           </button>
-          <button onClick={handlePrev} className="flex items-center gap-2 px-6 py-4 bg-cyan-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg">
+
+          <button
+            onClick={handlePrev}
+            className="flex items-center gap-2 px-6 py-4 bg-cyan-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg"
+          >
             <ChevronLeft size={28} /> Previous
           </button>
-          <button onClick={() => speak(`${currentItem.letter} is for ${currentItem.word}`)} className="flex items-center gap-2 px-6 py-4 bg-rose-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg">
+
+          <button
+            onClick={() => speak(`${currentItem.letter} is for ${currentItem.word}`)}
+            className="flex items-center gap-2 px-6 py-4 bg-rose-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg"
+          >
             <Volume2 size={28} /> Speak
           </button>
-          <button onClick={() => setIsMuted(prev => !prev)} className={`flex items-center gap-2 px-6 py-4 ${isMuted ? 'bg-gray-400' : 'bg-amber-400'} text-white rounded-full text-xl md:text-2xl font-bold shadow-lg`}>
+
+          <button
+            onClick={() => setIsMuted(prev => !prev)}
+            className={`flex items-center gap-2 px-6 py-4 ${isMuted ? 'bg-gray-400' : 'bg-amber-400'} text-white rounded-full text-xl md:text-2xl font-bold shadow-lg`}
+          >
             {isMuted ? <VolumeX size={28} /> : <Volume2 size={28} />} {isMuted ? 'Muted' : 'Mute'}
           </button>
-          <button onClick={() => setIsAutoPlaying(prev => !prev)} className={`flex items-center gap-2 px-6 py-4 ${isAutoPlaying ? 'bg-indigo-400' : 'bg-emerald-400'} text-white rounded-full text-xl md:text-2xl font-bold shadow-lg`}>
+
+          <button
+            onClick={() => setIsAutoPlaying(prev => !prev)}
+            className={`flex items-center gap-2 px-6 py-4 ${isAutoPlaying ? 'bg-indigo-400' : 'bg-emerald-400'} text-white rounded-full text-xl md:text-2xl font-bold shadow-lg`}
+          >
             {isAutoPlaying ? <Pause size={28} /> : <Play size={28} />} {isAutoPlaying ? 'Pause' : 'Auto Play'}
           </button>
-          <button onClick={handleNext} className="flex items-center gap-2 px-6 py-4 bg-emerald-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg">
+
+          <button
+            onClick={handleNext}
+            className="flex items-center gap-2 px-6 py-4 bg-emerald-400 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg"
+          >
             Next <ChevronRight size={28} />
           </button>
-          <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 px-6 py-4 bg-slate-500 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg">
+
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-2 px-6 py-4 bg-slate-500 text-white rounded-full text-xl md:text-2xl font-bold shadow-lg"
+          >
             <Settings size={28} /> Voice Settings
           </button>
         </div>
@@ -368,8 +417,18 @@ export default function App() {
 
       <AnimatePresence>
         {showSettings && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white rounded-[40px] p-6 md:p-8 w-full max-w-md shadow-2xl relative border-[8px] border-indigo-400">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[40px] p-6 md:p-8 w-full max-w-md shadow-2xl relative border-[8px] border-indigo-400"
+            >
               <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full">
                 <X size={28} className="text-gray-500" />
               </button>
@@ -381,7 +440,12 @@ export default function App() {
               <div className="space-y-6">
                 <div className="space-y-4">
                   <label className="text-lg md:text-xl font-bold text-gray-700 block">Select Voice</label>
-                  <select value={selectedVoiceURI} onChange={(e) => setSelectedVoiceURI(e.target.value)} className="w-full p-4 bg-gray-100 rounded-2xl border-4 border-indigo-200 text-base md:text-lg font-bold text-gray-700">
+
+                  <select
+                    value={selectedVoiceURI}
+                    onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                    className="w-full p-4 bg-gray-100 rounded-2xl border-4 border-indigo-200 text-base md:text-lg font-bold text-gray-700"
+                  >
                     {voices.length === 0 ? (
                       <option value="">No voices available yet</option>
                     ) : (
@@ -392,6 +456,7 @@ export default function App() {
                       ))
                     )}
                   </select>
+
                   {selectedVoice && (
                     <p className="text-sm text-gray-500 font-semibold">
                       Current: {selectedVoice.name} ({selectedVoice.lang})
@@ -424,7 +489,16 @@ export default function App() {
                     <label className="text-lg md:text-xl font-bold text-gray-700">Speed (Rate)</label>
                     <span className="text-base md:text-lg font-mono bg-gray-100 px-3 py-1 rounded-lg">{speechRate.toFixed(1)}x</span>
                   </div>
-                  <input type="range" min="0.7" max="1.2" step="0.1" value={speechRate} onChange={(e) => setSpeechRate(parseFloat(e.target.value))} className="w-full h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+
+                  <input
+                    type="range"
+                    min="0.7"
+                    max="1.2"
+                    step="0.1"
+                    value={speechRate}
+                    onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                    className="w-full h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
                 </div>
 
                 <div className="space-y-4">
@@ -432,10 +506,25 @@ export default function App() {
                     <label className="text-lg md:text-xl font-bold text-gray-700">Tone (Pitch)</label>
                     <span className="text-base md:text-lg font-mono bg-gray-100 px-3 py-1 rounded-lg">{speechPitch.toFixed(1)}</span>
                   </div>
-                  <input type="range" min="0.8" max="1.6" step="0.1" value={speechPitch} onChange={(e) => setSpeechPitch(parseFloat(e.target.value))} className="w-full h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500" />
+
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="1.6"
+                    step="0.1"
+                    value={speechPitch}
+                    onChange={(e) => setSpeechPitch(parseFloat(e.target.value))}
+                    className="w-full h-4 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  />
                 </div>
 
-                <button onClick={() => { unlockSpeech(); window.setTimeout(() => speak('Hello! I am your female voice.'), 250); }} className="w-full py-4 bg-indigo-500 text-white rounded-2xl text-lg md:text-xl font-bold shadow-lg">
+                <button
+                  onClick={() => {
+                    unlockSpeech();
+                    window.setTimeout(() => speak('Hello! I am your female voice.'), 1000);
+                  }}
+                  className="w-full py-4 bg-indigo-500 text-white rounded-2xl text-lg md:text-xl font-bold shadow-lg flex items-center justify-center gap-2"
+                >
                   <Volume2 size={24} /> Test Female Voice
                 </button>
               </div>
